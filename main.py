@@ -27,9 +27,9 @@ async def root():
 # /start কমান্ড হ্যান্ডলার
 @dp.message(CommandStart())
 async def start_handler(message: Message):
-    await message.answer("✅ বট চালু আছে! গ্রুপে যেকেউ মেসেজ পাঠালেই নিয়ম অনুযায়ী অ্যাকশন হবে।")
+    await message.answer("✅ বট চালু আছে!")
 
-# সবার মেসেজ প্রসেসর
+# মেসেজ প্রসেসর
 @dp.message()
 async def handle_all_messages(message: Message):
     try:
@@ -42,8 +42,8 @@ async def handle_all_messages(message: Message):
                 except TelegramBadRequest as e:
                     logging.warning(f"Cannot delete text message id={message.message_id}: {e}")
 
-        elif message.caption:
-            # মিডিয়াতে ক্যাপশন থাকলে ➔ ক্যাপশন ফাঁকা করবে
+        # যদি মিডিয়া টাইপের মেসেজ হয় ➔ ক্যাপশন ফাঁকা করবে
+        elif message.content_type in {"photo", "video", "document", "animation", "audio", "voice", "video_note"}:
             try:
                 await message.edit_caption(caption="", reply_markup=message.reply_markup)
                 logging.info(f"Cleared caption in media message id={message.message_id}")
