@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 TOKEN = os.getenv("API_TOKEN")
 
-# লিংক ডিটেক্ট করার প্যাটার্ন
+# লিংক ডিটেক্ট করার জন্য regex
 url_pattern = re.compile(r'(https?://\S+|www\.\S+)')
 
 bot = Bot(token=TOKEN)
@@ -24,28 +24,29 @@ app = FastAPI()
 async def root():
     return {"message": "Bot is running!"}
 
-# /start হ্যান্ডলার
+# /start কমান্ড হ্যান্ডলার
 @dp.message(CommandStart())
 async def start_handler(message: Message):
-    await message.answer("✅ বট চালু আছে! আমি টেক্সট থেকে শুধু লিংক মুছে দিবো এবং ক্যাপশন থাকলে ফাঁকা করে দিবো।")
+    await message.answer("✅ বট চালু আছে! গ্রুপে যেকেউ মেসেজ পাঠালেই নিয়ম অনুযায়ী অ্যাকশন হবে।")
 
-# মেইন কাজের হ্যান্ডলার
-@dp.message(F.content_type.in_({"text", "photo", "video", "document", "animation"}))
-async def clean_links(message: Message):
+# সবার মেসেজ প্রসেসর
+@dp.message()
+async def handle_all_messages(message: Message):
     try:
         if message.text:
-            # টেক্সটের মধ্যে লিংক থাকলে কাটা হবে
-            cleaned_text = url_pattern.sub('', message.text).strip()
-            if cleaned_text != message.text:
+            # টেক্সটে যদি লিংক থাকে ➔ মেসেজ ডিলিট করবে
+            if url_pattern.search(message.text):
                 try:
-                    await message.edit_text(cleaned_text or "⛔️ শুধুমাত্র লিংক ছিল, তাই লিংক মুছে ফেলা হয়েছে।", reply_markup=message.reply_markup)
+                    await message.delete()
+                    logging.info(f"Deleted text message with link from user {message.from_user.id}")
                 except TelegramBadRequest as e:
-                    logging.warning(f"Cannot edit text message id={message.message_id}: {e}")
+                    logging.warning(f"Cannot delete text message id={message.message_id}: {e}")
 
         elif message.caption:
-            # ক্যাপশন থাকলে সরিয়ে দিবে
+            # মিডিয়াতে ক্যাপশন থাকলে ➔ ক্যাপশন ফাঁকা করবে
             try:
                 await message.edit_caption(caption="", reply_markup=message.reply_markup)
+                logging.info(f"Cleared caption in media message id={message.message_id}")
             except TelegramBadRequest as e:
                 logging.warning(f"Cannot edit caption of message id={message.message_id}: {e}")
 
