@@ -1,64 +1,59 @@
-import asyncio
 import logging
 import os
+import asyncio
 import re
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
-from fastapi import FastAPI
-import uvicorn
-
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
-from aiogram.exceptions import TelegramBadRequest
 
-TOKEN = os.getenv("API_TOKEN")
+API_TOKEN = os.getenv("API_TOKEN")  # Render এ সেট করা Environment Variable
+
+logging.basicConfig(level=logging.INFO)
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher()
 
 # লিংক ডিটেক্ট করার জন্য regex
 url_pattern = re.compile(r'(https?://\S+|www\.\S+)')
 
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
-
-app = FastAPI()
-
-@app.get("/")
-async def root():
-    return {"message": "Bot is running!"}
-
-# /start কমান্ড হ্যান্ডলার
 @dp.message(CommandStart())
-async def start_handler(message: Message):
-    await message.answer("✅ বট চালু আছে!")
+async def start_handler(message: types.Message):
+    await message.answer("আমি প্রস্তুত! ছবি, ভিডিও, ডকুমেন্ট পাঠান - আমি ক্যাপশন সরিয়ে দিবো।")
 
-# মেসেজ প্রসেসর
 @dp.message()
-async def handle_all_messages(message: Message):
+async def remove_caption_or_link(message: types.Message):
     try:
-        if message.text:
-            # টেক্সটে যদি লিংক থাকে ➔ মেসেজ ডিলিট করবে
-            if url_pattern.search(message.text):
-                try:
-                    await message.delete()
-                    logging.info(f"Deleted text message with link from user {message.from_user.id}")
-                except TelegramBadRequest as e:
-                    logging.warning(f"Cannot delete text message id={message.message_id}: {e}")
+        # যদি টেক্সট মেসেজ হয় এবং তাতে লিংক থাকে ➔ মেসেজ ডিলিট করবে
+        if message.text and url_pattern.search(message.text):
+            if message.chat.type in ["group", "supergroup"]:
+                await message.delete()
+                logging.info(f"Deleted text message with link from {message.from_user.id}")
 
-        # যদি মিডিয়া টাইপের মেসেজ হয় ➔ ক্যাপশন ফাঁকা করবে
-        elif message.content_type in {"photo", "video", "document", "animation", "audio", "voice", "video_note"}:
+        # যদি মিডিয়া মেসেজ হয় ➔ ক্যাপশন থাকুক বা না থাকুক ➔ ক্যাপশন ছাড়া নতুন করে পাঠাবে
+        elif message.photo or message.video or message.document or message.animation:
             try:
-                await message.edit_caption(caption="", reply_markup=message.reply_markup)
-                logging.info(f"Cleared caption in media message id={message.message_id}")
-            except TelegramBadRequest as e:
-                logging.warning(f"Cannot edit caption of message id={message.message_id}: {e}")
+                if message.chat.type in ["group", "supergroup"]:
+                    await message.delete()
+                
+                # ক্যাপশন ছাড়া মিডিয়া আবার পাঠানো
+                if message.photo:
+                    file_id = message.photo[-1].file_id
+                    await message.answer_photo(photo=file_id)
+                elif message.video:
+                    file_id = message.video.file_id
+                    await message.answer_video(video=file_id)
+                elif message.document:
+                    file_id = message.document.file_id
+                    await message.answer_document(document=file_id)
+                elif message.animation:
+                    file_id = message.animation.file_id
+                    await message.answer_animation(animation=file_id)
+            except Exception as e:
+                logging.error(f"Error processing media: {e}")
 
     except Exception as e:
-        logging.error(f"Error: {e}")
+        logging.error(f"Error in processing message: {e}")
 
 async def main():
-    logging.basicConfig(level=logging.INFO)
-    asyncio.create_task(dp.start_polling(bot))
-    config = uvicorn.Config(app=app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
-    server = uvicorn.Server(config)
-    await server.serve()
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
