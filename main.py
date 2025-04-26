@@ -33,20 +33,22 @@ async def self_ping():
                 logging.info("Self-ping sent!")
         except Exception as e:
             logging.error(f"Ping error: {e}")
-        await asyncio.sleep(300)  # প্রতি 5 মিনিটে ping
+        await asyncio.sleep(300)  # প্রতি ৫ মিনিটে পিং
 
-# Telegram Bot Handler
+# Start Command Handler
 @dp.message(CommandStart())
 async def start_handler(message: types.Message):
-    await message.answer("আমি প্রস্তুত! ছবি, ভিডিও, ডকুমেন্ট পাঠান - আমি ক্যাপশন সরিয়ে দিবো।")
+    await message.answer("✅ বট চালু আছে! ক্যাপশন সরাতে প্রস্তুত।")
 
+# Main Handler
 @dp.message()
 async def remove_caption(message: types.Message):
-    if message.photo or message.video or message.document or message.animation:
-        if message.caption:
+    # শুধু গ্রুপে কাজ করবে
+    if message.chat.type in ["group", "supergroup"]:
+        # মিডিয়া মেসেজ এবং ক্যাপশন আছে কিনা চেক
+        if (message.photo or message.video or message.document or message.animation) and message.caption:
             try:
-                if message.chat.type in ["group", "supergroup"]:
-                    await message.delete()
+                await message.delete()
                 
                 if message.photo:
                     file_id = message.photo[-1].file_id
@@ -60,8 +62,9 @@ async def remove_caption(message: types.Message):
                 elif message.animation:
                     file_id = message.animation.file_id
                     await message.answer_animation(animation=file_id)
+                    
             except Exception as e:
-                logging.error(f"Error processing media: {e}")
+                logging.error(f"Error while processing message: {e}")
 
 async def main():
     await asyncio.gather(
