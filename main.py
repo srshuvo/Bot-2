@@ -6,8 +6,8 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
 from fastapi import FastAPI
 import uvicorn
+from aiogram.exceptions import TelegramBadRequest
 
-# টোকেন নিচ্ছে API_TOKEN নামে env থেকে
 TOKEN = os.getenv("API_TOKEN")
 
 url_pattern = re.compile(r'https?://\S+|www\.\S+')
@@ -15,7 +15,6 @@ url_pattern = re.compile(r'https?://\S+|www\.\S+')
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# FastAPI server setup
 app = FastAPI()
 
 @app.get("/")
@@ -27,10 +26,14 @@ async def remove_links_and_captions(message: Message):
     try:
         text = message.text or message.caption
         if text and (url_pattern.search(text) or message.entities or message.caption_entities):
-            if message.text:
-                await message.edit_text("⛔️ লিংক মুছে ফেলা হয়েছে", reply_markup=message.reply_markup)
-            elif message.caption:
-                await message.edit_caption(caption="⛔️ ক্যাপশন মুছে ফেলা হয়েছে", reply_markup=message.reply_markup)
+            try:
+                if message.text:
+                    await message.edit_text("⛔️ লিংক মুছে ফেলা হয়েছে", reply_markup=message.reply_markup)
+                elif message.caption:
+                    await message.edit_caption(caption="⛔️ ক্যাপশন মুছে ফেলা হয়েছে", reply_markup=message.reply_markup)
+            except TelegramBadRequest:
+                # যদি Edit করতে না পারে, তখন Ignore করবে
+                logging.warning(f"Cannot edit message id={message.message_id}")
     except Exception as e:
         logging.error(f"Error: {e}")
 
