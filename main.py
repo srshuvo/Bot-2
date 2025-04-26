@@ -1,6 +1,7 @@
 import logging
 import os
 import asyncio
+import re
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiohttp import web
@@ -33,38 +34,30 @@ async def self_ping():
                 logging.info("Self-ping sent!")
         except Exception as e:
             logging.error(f"Ping error: {e}")
-        await asyncio.sleep(300)  # প্রতি ৫ মিনিটে পিং
+        await asyncio.sleep(300)
 
-# Start Command Handler
+# Helper function: টেক্সট বা ক্যাপশনে লিংক আছে কিনা চেক
+def contains_link(text):
+    if text:
+        pattern = r"(https?://\S+|www\.\S+)"
+        return re.search(pattern, text)
+    return False
+
+# Start Command
 @dp.message(CommandStart())
 async def start_handler(message: types.Message):
-    await message.answer("✅ বট চালু আছে! ক্যাপশন সরাতে প্রস্তুত।")
+    await message.answer("✅ বট প্রস্তুত! যেখানে ক্যাপশন বা মেসেজে লিংক পাবে, সাথে সাথে ডিলিট করবে।")
 
 # Main Handler
 @dp.message()
-async def remove_caption(message: types.Message):
-    # শুধু গ্রুপে কাজ করবে
+async def remove_links(message: types.Message):
     if message.chat.type in ["group", "supergroup"]:
-        # মিডিয়া মেসেজ এবং ক্যাপশন আছে কিনা চেক
-        if (message.photo or message.video or message.document or message.animation) and message.caption:
-            try:
+        try:
+            # যদি টেক্সট মেসেজ বা ক্যাপশন এ লিংক থাকে
+            if contains_link(message.text) or contains_link(message.caption):
                 await message.delete()
-                
-                if message.photo:
-                    file_id = message.photo[-1].file_id
-                    await message.answer_photo(photo=file_id)
-                elif message.video:
-                    file_id = message.video.file_id
-                    await message.answer_video(video=file_id)
-                elif message.document:
-                    file_id = message.document.file_id
-                    await message.answer_document(document=file_id)
-                elif message.animation:
-                    file_id = message.animation.file_id
-                    await message.answer_animation(animation=file_id)
-                    
-            except Exception as e:
-                logging.error(f"Error while processing message: {e}")
+        except Exception as e:
+            logging.error(f"Error deleting message: {e}")
 
 async def main():
     await asyncio.gather(
