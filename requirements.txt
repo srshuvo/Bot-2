@@ -1,2 +1,7 @@
-aiogram
-aiohttp
+aiogram 
+aiohttp 
+python-dotenv 
+Flask 
+requests 
+fastapi
+uvicorn
