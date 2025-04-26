@@ -36,28 +36,56 @@ async def self_ping():
             logging.error(f"Ping error: {e}")
         await asyncio.sleep(300)
 
-# Helper function: টেক্সট বা ক্যাপশনে লিংক আছে কিনা চেক
-def contains_link(text):
+# Helper function: মেসেজ থেকে লিংক সরানো
+def remove_links(text):
     if text:
         pattern = r"(https?://\S+|www\.\S+)"
-        return re.search(pattern, text)
-    return False
+        return re.sub(pattern, '', text).strip()
+    return text
 
 # Start Command
 @dp.message(CommandStart())
 async def start_handler(message: types.Message):
-    await message.answer("✅ বট প্রস্তুত! যেখানে ক্যাপশন বা মেসেজে লিংক পাবে, সাথে সাথে ডিলিট করবে।")
+    await message.answer("✅ বট প্রস্তুত! ক্যাপশন ও লিংক সরাতে প্রস্তুত।")
 
 # Main Handler
 @dp.message()
-async def remove_links(message: types.Message):
+async def process_message(message: types.Message):
     if message.chat.type in ["group", "supergroup"]:
         try:
-            # যদি টেক্সট মেসেজ বা ক্যাপশন এ লিংক থাকে
-            if contains_link(message.text) or contains_link(message.caption):
-                await message.delete()
+            # যদি মিডিয়া থাকে এবং ক্যাপশন থাকে
+            if (message.photo or message.video or message.document or message.animation) and message.caption:
+                clean_caption = remove_links(message.caption)
+                if clean_caption != message.caption:
+                    await bot.edit_message_caption(
+                        chat_id=message.chat.id,
+                        message_id=message.message_id,
+                        caption=clean_caption
+                    )
+
+            # যদি টেক্সট মেসেজে লিংক থাকে
+            elif message.text:
+                clean_text = remove_links(message.text)
+                if clean_text != message.text:
+                    await bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=message.message_id,
+                        text=clean_text
+                    )
+            
+            # যদি বট মেসেজ থাকে
+            if message.from_user.is_bot:
+                if (message.photo or message.video or message.document or message.animation) and message.caption:
+                    clean_caption = remove_links(message.caption)
+                    if clean_caption != message.caption:
+                        await bot.edit_message_caption(
+                            chat_id=message.chat.id,
+                            message_id=message.message_id,
+                            caption=clean_caption
+                        )
+
         except Exception as e:
-            logging.error(f"Error deleting message: {e}")
+            logging.error(f"Error editing message: {e}")
 
 async def main():
     await asyncio.gather(
