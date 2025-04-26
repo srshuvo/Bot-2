@@ -7,16 +7,15 @@ from aiogram.types import Message
 from fastapi import FastAPI
 import uvicorn
 
-from aiogram.filters import CommandStart
-
-TOKEN = os.getenv("BOT_TOKEN")
+# টোকেন নিচ্ছে API_TOKEN নামে env থেকে
+TOKEN = os.getenv("API_TOKEN")
 
 url_pattern = re.compile(r'https?://\S+|www\.\S+')
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# FastAPI Server Setup
+# FastAPI server setup
 app = FastAPI()
 
 @app.get("/")
@@ -38,7 +37,6 @@ async def remove_links_and_captions(message: Message):
 async def main():
     logging.basicConfig(level=logging.INFO)
     asyncio.create_task(dp.start_polling(bot))
-    # FastAPI server রান করানো
     config = uvicorn.Config(app=app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
     server = uvicorn.Server(config)
     await server.serve()
