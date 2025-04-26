@@ -7,8 +7,11 @@ from aiohttp import web
 import aiohttp
 
 API_TOKEN = os.getenv("API_TOKEN")
+SELF_URL = os.getenv("SELF_URL")  # নিজের বটের URL (Self-ping এর জন্য)
 
+# Logging শুরু
 logging.basicConfig(level=logging.INFO)
+
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
@@ -25,31 +28,35 @@ async def keep_alive():
     await site.start()
     logging.info("Keep Alive Server started on port 8080")
 
+# Self-Ping প্রতি ৫ মিনিটে
 async def self_ping():
+    if not SELF_URL:
+        logging.warning("SELF_URL নাই, Self-ping স্কিপ করা হচ্ছে।")
+        return
+
     while True:
         try:
             async with aiohttp.ClientSession() as session:
-                await session.get(os.getenv("SELF_URL"))
-                logging.info("Self-ping sent!")
+                await session.get(SELF_URL)
+                logging.info("Self-ping পাঠানো হয়েছে!")
         except Exception as e:
             logging.error(f"Ping error: {e}")
         await asyncio.sleep(300)  # প্রতি ৫ মিনিটে পিং
 
-# Start Command Handler
+# /start কমান্ড হ্যান্ডলার
 @dp.message(CommandStart())
 async def start_handler(message: types.Message):
     await message.answer("✅ বট চালু আছে! ক্যাপশন সরাতে প্রস্তুত।")
 
-# Main Handler
+# মূল ক্যাপশন রিমুভার হ্যান্ডলার
 @dp.message()
 async def remove_caption(message: types.Message):
-    # শুধু গ্রুপে কাজ করবে
     if message.chat.type in ["group", "supergroup"]:
-        # মিডিয়া মেসেজ এবং ক্যাপশন আছে কিনা চেক
         if (message.photo or message.video or message.document or message.animation) and message.caption:
             try:
                 await message.delete()
-                
+
+                # মিডিয়া resend
                 if message.photo:
                     file_id = message.photo[-1].file_id
                     await message.answer_photo(photo=file_id)
@@ -62,10 +69,11 @@ async def remove_caption(message: types.Message):
                 elif message.animation:
                     file_id = message.animation.file_id
                     await message.answer_animation(animation=file_id)
-                    
+
             except Exception as e:
                 logging.error(f"Error while processing message: {e}")
 
+# মেইন ফাংশন
 async def main():
     await asyncio.gather(
         dp.start_polling(bot),
