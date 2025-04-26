@@ -1,71 +1,77 @@
 import logging
-import asyncio
 import os
-
+import asyncio
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import CommandStart
 from aiohttp import web
+import aiohttp
 
-TOKEN = os.getenv("BOT_TOKEN")
-PORT = int(os.getenv("PORT", 8080))  # Render PORT
-HOST = "0.0.0.0"
+API_TOKEN = os.getenv("API_TOKEN")
 
 logging.basicConfig(level=logging.INFO)
-
-bot = Bot(token=TOKEN)
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
-# ক্যাপশন মুছে মিডিয়া পাঠাবে
-@dp.message()
-async def remove_caption_and_send_media(message: types.Message):
-    if message.photo:
-        try:
-            # ক্যাপশন থাকলে মুছে দিবে, শুধু ছবি পাঠাবে
-            await bot.edit_message_caption(
-                chat_id=message.chat.id,
-                message_id=message.message_id,
-                caption=""  # ক্যাপশন ফাঁকা করে দিবে
-            )
-        except Exception as e:
-            logging.error(f"Failed to remove caption: {e}")
-    
-    elif message.video:
-        try:
-            # ক্যাপশন থাকলে মুছে দিবে, শুধু ভিডিও পাঠাবে
-            await bot.edit_message_caption(
-                chat_id=message.chat.id,
-                message_id=message.message_id,
-                caption=""  # ক্যাপশন ফাঁকা করে দিবে
-            )
-        except Exception as e:
-            logging.error(f"Failed to remove caption: {e}")
-    
-    elif message.document:
-        try:
-            # ক্যাপশন থাকলে মুছে দিবে, শুধু ডকুমেন্ট পাঠাবে
-            await bot.edit_message_caption(
-                chat_id=message.chat.id,
-                message_id=message.message_id,
-                caption=""  # ক্যাপশন ফাঁকা করে দিবে
-            )
-        except Exception as e:
-            logging.error(f"Failed to remove caption: {e}")
-
-# HTTP server for UptimeRobot
+# Keep Alive Server
 async def handle(request):
     return web.Response(text="Bot is alive!")
 
-async def main():
-    # Run aiohttp web server
+async def keep_alive():
     app = web.Application()
     app.router.add_get("/", handle)
-
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, host=HOST, port=PORT)
+    site = web.TCPSite(runner, "0.0.0.0", 8080)
     await site.start()
+    logging.info("Keep Alive Server started on port 8080")
 
-    # Run the bot
-    await dp.start_polling(bot)
+async def self_ping():
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                await session.get(os.getenv("SELF_URL"))
+                logging.info("Self-ping sent!")
+        except Exception as e:
+            logging.error(f"Ping error: {e}")
+        await asyncio.sleep(300)  # প্রতি ৫ মিনিটে পিং
+
+# Start Command Handler
+@dp.message(CommandStart())
+async def start_handler(message: types.Message):
+    await message.answer("✅ বট চালু আছে! ক্যাপশন সরাতে প্রস্তুত।")
+
+# Main Handler
+@dp.message()
+async def remove_caption(message: types.Message):
+    # শুধু গ্রুপে কাজ করবে
+    if message.chat.type in ["group", "supergroup"]:
+        # মিডিয়া মেসেজ এবং ক্যাপশন আছে কিনা চেক
+        if (message.photo or message.video or message.document or message.animation) and message.caption:
+            try:
+                await message.delete()
+                
+                if message.photo:
+                    file_id = message.photo[-1].file_id
+                    await message.answer_photo(photo=file_id)
+                elif message.video:
+                    file_id = message.video.file_id
+                    await message.answer_video(video=file_id)
+                elif message.document:
+                    file_id = message.document.file_id
+                    await message.answer_document(document=file_id)
+                elif message.animation:
+                    file_id = message.animation.file_id
+                    await message.answer_animation(animation=file_id)
+                    
+            except Exception as e:
+                logging.error(f"Error while processing message: {e}")
+
+async def main():
+    await asyncio.gather(
+        dp.start_polling(bot),
+        keep_alive(),
+        self_ping()
+    )
 
 if __name__ == "__main__":
     asyncio.run(main())
